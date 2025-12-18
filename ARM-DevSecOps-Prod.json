@@ -47,6 +47,15 @@
       "identity": {
         "type": "SystemAssigned"
       },
+        {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-03-01",
+      "name": "[format('{0}-{1}-devsecops-{2}', parameters('webAppName'), 'prod', resourcegroup().tags.LabInstance)]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux,container",
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "properties": {
         "enabled": true,
         "serverFarmId": "[resourceId(parameters('appServicePlanResourceGroupName'),'Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
@@ -99,3 +108,4 @@
     }
   }
 }
+
