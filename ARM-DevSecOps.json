@@ -20,7 +20,7 @@
       "apiVersion": "2021-03-01",
       "name": "[parameters('appServicePlanName')]",
       "location": "[parameters('location')]",
-      "sku": { "name": "P1v3", "tier": "PremiumV3", "size": "P1v3", "family": "Pv3", "capacity": 1 },
+      "sku": { "name": "S1", "tier": "Standart", "capacity": 1 },
       "kind": "linux",
       "properties": { "reserved": true }
     },
@@ -114,3 +114,4 @@
   ],
   "outputs": { "stringOutput": { "type": "string", "value": "[variables('DockerCompose')]" } }
 }
+
