@@ -44,17 +44,103 @@
   },
   "resources": [
     {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-03-01",
+      "name": "[parameters('containerInstanceName')]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux,container",
+      "identity": { "type": "SystemAssigned" },
+      "properties": {
+        "enabled": true,
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "reserved": true,
+        "siteConfig": {
+          "numberOfWorkers": 1,
+          "linuxFxVersion": "DOCKER|sonarqube",
+          "http20Enabled": true,
+          "appSettings": [{ "name": "WEBSITES_ENABLE_APP_SERVICE_STORAGE", "value": "true" }]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+      ]
+    },
+    {
       "type": "Microsoft.Web/serverfarms",
       "apiVersion": "2021-03-01",
       "name": "[parameters('appServicePlanName')]",
       "location": "[parameters('location')]",
-      "sku": {
-        "name": "S1",
-        "tier": "Standard",
-        "capacity": 1
-      },
+      "sku": { "name": "S1", "tier": "Standard", "capacity": 1 },
       "kind": "linux",
       "properties": {}
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries",
+      "apiVersion": "2021-12-01-preview",
+      "name": "[parameters('acrName')]",
+      "location": "[parameters('location')]",
+      "sku": { "name": "Standard" },
+      "properties": { "adminUserEnabled": true }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2021-11-01-preview",
+      "name": "[parameters('keyvaultName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": { "family": "A", "name": "standard" },
+        "accessPolicies": [],
+        "tenantId": "[parameters('tenantId')]"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-03-01",
+      "name": "[format('{0}-{1}-devsecops-{2}', parameters('webAppName'), 'dev', resourcegroup().tags.LabInstance)]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux,container",
+      "identity": { "type": "SystemAssigned" },
+      "properties": {
+        "enabled": true,
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "siteConfig": {
+          "numberOfWorkers": 1,
+          "linuxFxVersion": "[format('DOCKER|{0}/juiceshopgit:1', reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))).loginServer)]",
+          "http20Enabled": true,
+          "appSettings": [
+            { "name": "DOCKER_REGISTRY_SERVER_URL", "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))).loginServer]" },
+            { "name": "DOCKER_REGISTRY_SERVER_USERNAME", "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2021-12-01-preview').username]" },
+            { "name": "DOCKER_REGISTRY_SERVER_PASSWORD", "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2021-12-01-preview').passwords[0].value]" }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-03-01",
+      "name": "[format('dependency-track-devsecops-{0}', resourcegroup().tags.LabInstance)]",
+      "location": "[parameters('location')]",
+      "kind": "app,linux,container",
+      "identity": { "type": "SystemAssigned" },
+      "properties": {
+        "enabled": true,
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "siteConfig": {
+          "numberOfWorkers": 1,
+          "linuxFxVersion": "[concat('COMPOSE|', base64(variables('DockerCompose')))]",
+          "http20Enabled": true,
+          "appSettings": [{ "name": "WEBSITES_ENABLE_APP_SERVICE_STORAGE", "value": "true" }]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+      ]
     },
     {
       "type": "Microsoft.Sql/servers",
@@ -67,9 +153,40 @@
         "administratorLoginPassword": "P@$$w0rd123",
         "version": "12.0",
         "minimalTlsVersion": "1.2",
-        "publicNetworkAccess": "Enabled",
-        "restrictOutboundNetworkAccess": "Disabled"
+        "publicNetworkAccess": "Enabled"
       }
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases",
+      "apiVersion": "2021-11-01-preview",
+      "name": "[concat(format('sql-devsecops-{0}', resourcegroup().tags.LabInstance), '/dtrack')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', format('sql-devsecops-{0}', resourcegroup().tags.LabInstance))]"
+      ],
+      "sku": { "name": "Basic", "tier": "Basic", "family": "Gen5", "capacity": 1 },
+      "properties": { "collation": "SQL_Latin1_General_CP1_CI_AS" }
+    },
+    {
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "apiVersion": "2021-11-01-preview",
+      "name": "[concat(format('sql-devsecops-{0}', resourcegroup().tags.LabInstance), '/AllowAccess')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', format('sql-devsecops-{0}', resourcegroup().tags.LabInstance))]"
+      ],
+      "properties": { "endIpAddress": "0.0.0.0", "startIpAddress": "0.0.0.0" }
+    },
+    {
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "apiVersion": "2021-11-01-preview",
+      "name": "[concat(format('sql-devsecops-{0}', resourcegroup().tags.LabInstance), '/AllowAllWindowsAzureIps')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', format('sql-devsecops-{0}', resourcegroup().tags.LabInstance))]"
+      ],
+      "properties": { "endIpAddress": "255.255.255.255", "startIpAddress": "255.255.255.255" }
     }
-  ]
+  ],
+  "outputs": {
+    "stringOutput": { "type": "string", "value": "[variables('DockerCompose')]" }
+  }
 }
